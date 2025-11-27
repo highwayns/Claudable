@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  claudable:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: claudable
+    restart: unless-stopped
+
+    ports:
+      # Main application port
+      - "${PORT:-3000}:3000"
+      # Preview ports range
+      - "3100-3200:3100-3200"
+
+    environment:
+      # Database
+      - DATABASE_URL=file:/app/data/cc.db
+
+      # Directories
+      - PROJECTS_DIR=/app/data/projects
+
+      # Encryption (CHANGE THIS IN PRODUCTION!)
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-your-secure-encryption-key-here-must-be-32-bytes}
+
+      # Application
+      - PORT=${PORT:-3000}
+      - WEB_PORT=${WEB_PORT:-3000}
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+
+      # Preview ports
+      - PREVIEW_PORT_START=${PREVIEW_PORT_START:-3100}
+      - PREVIEW_PORT_END=${PREVIEW_PORT_END:-3200}
+
+      # Node environment
+      - NODE_ENV=production
+
+    volumes:
+      # Persist database and projects
+      - claudable-data:/app/data
+
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    networks:
+      - claudable-network
+
+volumes:
+  claudable-data:
+    driver: local
+
+networks:
+  claudable-network:
+    driver: bridge
