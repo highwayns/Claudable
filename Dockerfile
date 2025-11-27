@@ -2,7 +2,7 @@
 # Multi-stage build for optimized production image
 
 # ============================================================
-# Stage 1: Dependencies
+# Stage 1: Dependencies (All)
 # ============================================================
 FROM node:20-alpine AS deps
 
@@ -14,12 +14,28 @@ WORKDIR /app
 # Copy package files
 COPY package.json package-lock.json* ./
 
-# Install dependencies
-RUN npm ci --only=production --ignore-scripts && \
+# Install ALL dependencies (including devDependencies needed for build)
+RUN npm ci --ignore-scripts && \
     npm cache clean --force
 
 # ============================================================
-# Stage 2: Builder
+# Stage 2: Production Dependencies Only
+# ============================================================
+FROM node:20-alpine AS production-deps
+
+RUN apk add --no-cache libc6-compat openssl
+
+WORKDIR /app
+
+# Copy package files
+COPY package.json package-lock.json* ./
+
+# Install only production dependencies
+RUN npm ci --omit=dev --ignore-scripts && \
+    npm cache clean --force
+
+# ============================================================
+# Stage 3: Builder
 # ============================================================
 FROM node:20-alpine AS builder
 
@@ -67,9 +83,11 @@ RUN addgroup --system --gid 1001 nodejs && \
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# Copy package files
+COPY --from=builder /app/package.json ./package.json
+
 # Copy necessary files from builder
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/next.config.js ./next.config.js
 
 # Copy Prisma files
